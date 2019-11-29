@@ -5,7 +5,7 @@ import { jobs } from "../lib/jobs";
 import { wrapJavaPerform } from "./lib/libjava";
 import {
   ArrayList, CertificatePinner, PinningTrustManager, SSLCertificateChecker,
-  SSLContext, TrustManagerImpl, X509TrustManager,
+  SSLContext, TrustManagerImpl, X509TrustManager, CuemeConfigurator
 } from "./lib/types";
 
 export namespace sslpinning {
@@ -254,6 +254,34 @@ export namespace sslpinning {
     });
   };
 
+  const openstreamCueMeConfiguratorMMIBrowserProperties = (ident: string): any | undefined => {
+    return wrapJavaPerform(() => {
+      try {
+        const CuemeConfigurator: CuemeConfigurator = Java.use("com.openstream.cueme.config.CuemeConfigurator");
+        
+        send(
+          c.blackBright(`Found com.openstream.cueme.config.CuemeConfigurator, ` +
+            `overriding CuemeConfigurator.getMMIBrowserProperties()`),
+        );
+
+        CuemeConfigurator.getMMIBrowserProperties.implementation = function () {
+          var props = this.getMMIBrowserProperties();
+          props["container.security.enableSSLPinning"] = "false";
+          qsend(quiet,
+            c.blackBright(`[${ident}] `) + `Called ` +
+            c.green(`CuemeConfigurator.getMMIBrowserProperties()`) + `, not throwing an exception.`,
+          );
+          return props;
+        };
+
+      } catch (err) {
+        if (err.message.indexOf("ClassNotFoundException") === 0) {
+          throw new Error(err);
+        }
+      }
+    });
+  };
+
   // the main exported function to run all of the pinning bypass methods known
   export const disable = (q: boolean): void => {
     if (q) {
@@ -273,6 +301,7 @@ export namespace sslpinning {
     job.implementations.push(trustManagerImplVerifyChainCheck(job.identifier));
     job.implementations.push(trustManagerImplCheckTrustedRecursiveCheck(job.identifier));
     job.implementations.push(phoneGapSSLCertificateChecker(job.identifier));
+    job.implementations.push(openstreamCueMeConfiguratorMMIBrowserProperties(job.identifier));
     jobs.add(job);
   };
 }
